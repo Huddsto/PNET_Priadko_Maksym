@@ -1,0 +1,311 @@
+@page "/"
+@rendermode InteractiveServer
+@using StudentsBlazorApp.Components.Pages.Dashboard
+@using StudentsBlazorApp.Services
+@inject IDashboardService dashboardService
+@inject NavigationManager nav
+
+<PageTitle>Students Dashboard</PageTitle>
+
+<h1 class="mb-3">Students Dashboard</h1>
+
+@if (!string.IsNullOrWhiteSpace(statusMessage))
+{
+    <div class="alert @(statusIsError ? "alert-danger" : "alert-info")">@statusMessage</div>
+}
+
+@if (isLoading)
+{
+    <p>Loading...</p>
+}
+else if (activeTab == "stats")
+{
+    <StatisticsTab StudentCount="students.Count"
+                   CourseCount="courses.Count"
+                   AssignmentCount="assignments.Count"
+                   EnrollmentCount="enrollments.Count"
+                   TopStudents="TopStudents"
+                   AveragePerStudent="AveragePerStudent"
+                   AveragePerCourse="AveragePerCourse" />
+}
+else if (activeTab == "students")
+{
+    <StudentsTab Students="students"
+                 OnAddStudent="AddStudent"
+                 OnUpdateStudent="UpdateStudent"
+                 OnDeleteStudent="DeleteStudent" />
+}
+else if (activeTab == "courses")
+{
+    <CoursesTab Courses="courses"
+                OnAddCourse="AddCourse"
+                OnDeleteCourse="DeleteCourse" />
+}
+else if (activeTab == "assignments")
+{
+    <AssignmentsTab Assignments="assignments"
+                    Courses="courses"
+                    SelectedAssignmentId="selectedAssignmentId"
+                    OnSelectAssignment="SelectAssignment"
+                    OnAddAssignment="AddAssignment"
+                    OnDeleteAssignment="DeleteAssignment" />
+}
+else if (activeTab == "enrollments")
+{
+    <EnrollmentsTab Students="students"
+                    Courses="courses"
+                    Assignments="assignments"
+                    Enrollments="enrollments"
+                    Grades="grades"
+                    OnAddEnrollment="AddEnrollment"
+                    OnAddGrade="AddGrade"
+                    OnDeleteEnrollment="DeleteEnrollment" />
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "tab")]
+    public string? Tab { get; set; }
+
+    private readonly List<(string Key, string Label)> tabs =
+    [
+        ("stats", "Statistics"),
+        ("students", "Students"),
+        ("courses", "Courses"),
+        ("assignments", "Assignments"),
+        ("enrollments", "Enrollments")
+    ];
+
+    private List<Student> students = [];
+    private List<Teacher> teachers = [];
+    private List<Course> courses = [];
+    private List<Assignment> assignments = [];
+    private List<Enrollment> enrollments = [];
+    private List<Grade> grades = [];
+
+    private string activeTab = "stats";
+    private string? statusMessage;
+    private bool statusIsError;
+    private bool isLoading = true;
+    private Guid? selectedAssignmentId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshData();
+    }
+
+    protected override void OnParametersSet()
+    {
+        activeTab = tabs.Any(t => t.Key == Tab) ? Tab! : "stats";
+    }
+
+    private List<DashboardStatRow> TopStudents =>
+        BuildStudentStats()
+            .OrderByDescending(x => x.Average)
+            .ThenBy(x => x.Name)
+            .Take(5)
+            .ToList();
+
+    private List<DashboardStatRow> AveragePerStudent =>
+        BuildStudentStats()
+            .OrderBy(x => x.Name)
+            .ToList();
+
+    private List<DashboardStatRow> AveragePerCourse =>
+        (from grade in grades
+         join enrollment in enrollments on grade.EnrollmentId equals enrollment.Id
+         join course in courses on enrollment.CourseId equals course.Id
+         group grade by new { course.Id, course.Title } into grouped
+         select new DashboardStatRow(grouped.Key.Title, grouped.Average(g => g.Value)))
+        .OrderBy(x => x.Name)
+        .ToList();
+
+    private IEnumerable<DashboardStatRow> BuildStudentStats()
+    {
+        return
+            from grade in grades
+            join enrollment in enrollments on grade.EnrollmentId equals enrollment.Id
+            join student in students on enrollment.StudentId equals student.Id
+            group grade by new { student.Id, student.Name } into grouped
+            select new DashboardStatRow(grouped.Key.Name, grouped.Average(g => g.Value));
+    }
+
+    private async Task RefreshData()
+    {
+        isLoading = true;
+        ClearStatus();
+
+        var snapshot = await dashboardService.GetDashboardSnapshotAsync();
+
+        students = snapshot.Students;
+        teachers = snapshot.Teachers;
+        courses = snapshot.Courses;
+        assignments = snapshot.Assignments;
+        enrollments = snapshot.Enrollments;
+        grades = snapshot.Grades;
+
+        selectedAssignmentId = assignments.Any(a => a.Id == selectedAssignmentId) ? selectedAssignmentId : assignments.FirstOrDefault()?.Id;
+        isLoading = false;
+    }
+
+    private void SetTab(string tab)
+    {
+        nav.NavigateTo($"/?tab={tab}");
+    }
+
+    private void SelectAssignment(Guid assignmentId)
+    {
+        selectedAssignmentId = assignmentId;
+    }
+
+    private async Task AddStudent(StudentUpsertRequest request)
+    {
+        try
+        {
+            await dashboardService.AddStudentAsync(request);
+            await RefreshData();
+            SetStatus("Student added.");
+        }
+        catch (Exception ex)
+        {
+            SetStatus(ex.Message, true);
+        }
+    }
+
+    private async Task UpdateStudent(StudentUpdateRequest request)
+    {
+        try
+        {
+            await dashboardService.UpdateStudentAsync(request);
+            await RefreshData();
+            SetStatus("Student updated.");
+        }
+        catch (Exception ex)
+        {
+            SetStatus(ex.Message, true);
+        }
+    }
+
+    private async Task DeleteStudent(Guid id)
+    {
+        try
+        {
+            await dashboardService.DeleteStudentAsync(id);
+            await RefreshData();
+            SetStatus("Student deleted.");
+        }
+        catch (Exception ex)
+        {
+            SetStatus(ex.Message, true);
+        }
+    }
+
+    private async Task AddCourse(CourseCreateRequest request)
+    {
+        try
+        {
+            await dashboardService.AddCourseAsync(request);
+            await RefreshData();
+            SetStatus("Course added.");
+        }
+        catch (Exception ex)
+        {
+            SetStatus(ex.Message, true);
+        }
+    }
+
+    private async Task DeleteCourse(Guid id)
+    {
+        try
+        {
+            await dashboardService.DeleteCourseAsync(id);
+            await RefreshData();
+            SetStatus("Course deleted.");
+        }
+        catch (Exception ex)
+        {
+            SetStatus(ex.Message, true);
+        }
+    }
+
+    private async Task AddAssignment(AssignmentCreateRequest request)
+    {
+        try
+        {
+            await dashboardService.AddAssignmentAsync(request);
+            await RefreshData();
+            SetStatus("Assignment added.");
+        }
+        catch (Exception ex)
+        {
+            SetStatus(ex.Message, true);
+        }
+    }
+
+    private async Task DeleteAssignment(Guid id)
+    {
+        try
+        {
+            await dashboardService.DeleteAssignmentAsync(id);
+            await RefreshData();
+            SetStatus("Assignment deleted.");
+        }
+        catch (Exception ex)
+        {
+            SetStatus(ex.Message, true);
+        }
+    }
+
+    private async Task AddEnrollment(EnrollmentCreateRequest request)
+    {
+        try
+        {
+            await dashboardService.AddEnrollmentAsync(request);
+            await RefreshData();
+            SetStatus("Student enrolled.");
+        }
+        catch (Exception ex)
+        {
+            SetStatus(ex.Message, true);
+        }
+    }
+
+    private async Task DeleteEnrollment(Guid id)
+    {
+        try
+        {
+            await dashboardService.DeleteEnrollmentAsync(id);
+            await RefreshData();
+            SetStatus("Enrollment deleted.");
+        }
+        catch (Exception ex)
+        {
+            SetStatus(ex.Message, true);
+        }
+    }
+
+    private async Task AddGrade(GradeCreateRequest request)
+    {
+        try
+        {
+            await dashboardService.AddGradeAsync(request);
+            await RefreshData();
+            SetStatus("Grade added.");
+        }
+        catch (Exception ex)
+        {
+            SetStatus(ex.Message, true);
+        }
+    }
+
+    private void SetStatus(string message, bool isError = false)
+    {
+        statusMessage = message;
+        statusIsError = isError;
+    }
+
+    private void ClearStatus()
+    {
+        statusMessage = null;
+        statusIsError = false;
+    }
+}

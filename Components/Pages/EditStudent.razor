@@ -1,0 +1,62 @@
+@page "/students/edit/{id:guid}"
+@using Microsoft.EntityFrameworkCore
+@inject AppDbContext db
+@inject NavigationManager nav
+
+<PageTitle>Edit Student</PageTitle>
+
+<h3 class="mb-3">Edit Student</h3>
+
+@if (student == null)
+{
+    <p>Loading...</p>
+}
+else
+{
+    <div class="card p-4 shadow" style="max-width: 500px;">
+        <EditForm Model="student" OnValidSubmit="Save">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+
+            <div class="mb-3">
+                <label class="form-label">Name</label>
+                <InputText class="form-control" @bind-Value="student.Name" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Email</label>
+                <InputText class="form-control" @bind-Value="student.Email" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Age</label>
+                <InputNumber class="form-control" @bind-Value="student.Age" />
+            </div>
+
+            <button class="btn btn-primary w-100" type="submit">Update</button>
+        </EditForm>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid id { get; set; }
+
+    private Student? student;
+
+    protected override async Task OnInitializedAsync()
+    {
+        student = await db.Students.FirstOrDefaultAsync(s => s.Id == id);
+    }
+
+    private async Task Save()
+    {
+        if (student == null)
+        {
+            return;
+        }
+
+        db.Students.Update(student);
+        await db.SaveChangesAsync();
+        nav.NavigateTo("/students");
+    }
+}

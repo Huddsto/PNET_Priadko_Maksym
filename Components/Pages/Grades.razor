@@ -1,0 +1,54 @@
+@page "/grades"
+@using Microsoft.EntityFrameworkCore
+@inject AppDbContext db
+
+<PageTitle>Grades</PageTitle>
+
+<h2 class="mb-3">Grades</h2>
+
+@if (grades.Count == 0)
+{
+    <div class="alert alert-info">No grades found.</div>
+}
+else
+{
+    <table class="table table-striped table-hover">
+        <thead class="table-dark">
+            <tr>
+                <th>Student</th>
+                <th>Course</th>
+                <th>Assignment</th>
+                <th>Grade</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var grade in grades)
+            {
+                <tr>
+                    <td>@(grade.Enrollment?.Student?.Name ?? "-")</td>
+                    <td>@(grade.Enrollment?.Course?.Title ?? "-")</td>
+                    <td>@(grade.Assignment?.Title ?? "-")</td>
+                    <td>@grade.Value</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<Grade> grades = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        grades = await db.Grades
+            .AsNoTracking()
+            .Include(g => g.Assignment)
+            .Include(g => g.Enrollment)
+                .ThenInclude(e => e!.Student)
+            .Include(g => g.Enrollment)
+                .ThenInclude(e => e!.Course)
+            .OrderBy(g => g.Enrollment!.Student!.Name)
+            .ThenBy(g => g.Assignment!.Title)
+            .ToListAsync();
+    }
+}

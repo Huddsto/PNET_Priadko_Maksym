@@ -1,0 +1,171 @@
+@using StudentsBlazorApp.Components.Pages.Dashboard
+
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <h2 class="h4 mb-3">Enrollments</h2>
+        <EditForm Model="enrollmentForm" OnValidSubmit="SubmitEnrollment" FormName="add-enrollment-form">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+            <div class="row g-2 mb-4">
+                <div class="col-md-5">
+                    <InputSelect class="form-select" @bind-Value="enrollmentForm.StudentId">
+                        <option value="">Select student</option>
+                        @foreach (var student in Students)
+                        {
+                            <option value="@student.Id">@student.Name</option>
+                        }
+                    </InputSelect>
+                </div>
+                <div class="col-md-5">
+                    <InputSelect class="form-select" @bind-Value="enrollmentForm.CourseId">
+                        <option value="">Select course</option>
+                        @foreach (var course in Courses)
+                        {
+                            <option value="@course.Id">@course.Title</option>
+                        }
+                    </InputSelect>
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-primary w-100" type="submit">Enroll</button>
+                </div>
+            </div>
+        </EditForm>
+
+        @if (Enrollments.Count == 0)
+        {
+            <div class="text-muted">No enrollments found.</div>
+        }
+        else
+        {
+            @foreach (var enrollment in Enrollments)
+            {
+                var enrollmentGrades = Grades
+                    .Where(g => g.EnrollmentId == enrollment.Id)
+                    .OrderBy(g => g.Assignment?.Title)
+                    .ToList();
+                var courseAssignments = Assignments
+                    .Where(a => a.CourseId == enrollment.CourseId)
+                    .OrderBy(a => a.Title)
+                    .ToList();
+
+                <div class="border rounded p-3 mb-3">
+                    <div class="fw-semibold">@enrollment.Student?.Name / @enrollment.Course?.Title</div>
+                    <div class="text-muted mb-2">Enrolled @(enrollment.EnrolledAt.ToString("yyyy-MM-dd"))</div>
+                    <div class="mb-3">
+                        @if (enrollmentGrades.Count == 0)
+                        {
+                            <span class="text-muted">No grades</span>
+                        }
+                        else
+                        {
+                            <ul class="mb-0">
+                                @foreach (var grade in enrollmentGrades)
+                                {
+                                    <li>@(grade.Assignment?.Title ?? "-"): @grade.Value</li>
+                                }
+                            </ul>
+                        }
+                    </div>
+
+                    <div class="row g-2">
+                        <div class="col-md-5">
+                            <select class="form-select" @onchange="e => SetGradeAssignment(enrollment.Id, e.Value?.ToString())">
+                                <option value="">Select assignment</option>
+                                @foreach (var assignment in courseAssignments)
+                                {
+                                    <option value="@assignment.Id">@assignment.Title</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <input class="form-control"
+                                   type="number"
+                                   placeholder="Grade"
+                                   value="@GetGradeValue(enrollment.Id)"
+                                   @onchange="e => SetGradeValue(enrollment.Id, e.Value?.ToString())" />
+                        </div>
+                        <div class="col-md-2">
+                            <button type="button" class="btn btn-success w-100" @onclick="() => SubmitGrade(enrollment.Id)">Add Grade</button>
+                        </div>
+                        <div class="col-md-2">
+                            <button type="button" class="btn btn-outline-danger w-100" @onclick="() => OnDeleteEnrollment.InvokeAsync(enrollment.Id)">Delete</button>
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public IReadOnlyList<Student> Students { get; set; } = [];
+    [Parameter] public IReadOnlyList<Course> Courses { get; set; } = [];
+    [Parameter] public IReadOnlyList<Assignment> Assignments { get; set; } = [];
+    [Parameter] public IReadOnlyList<Enrollment> Enrollments { get; set; } = [];
+    [Parameter] public IReadOnlyList<Grade> Grades { get; set; } = [];
+    [Parameter] public EventCallback<EnrollmentCreateRequest> OnAddEnrollment { get; set; }
+    [Parameter] public EventCallback<GradeCreateRequest> OnAddGrade { get; set; }
+    [Parameter] public EventCallback<Guid> OnDeleteEnrollment { get; set; }
+
+    private readonly EnrollmentFormModel enrollmentForm = new();
+    private readonly Dictionary<Guid, Guid?> enrollmentAssignmentSelections = [];
+    private readonly Dictionary<Guid, string> enrollmentGradeValues = [];
+
+    private async Task SubmitEnrollment()
+    {
+        if (!enrollmentForm.StudentId.HasValue || !enrollmentForm.CourseId.HasValue)
+        {
+            return;
+        }
+
+        await OnAddEnrollment.InvokeAsync(new EnrollmentCreateRequest(
+            enrollmentForm.StudentId.Value,
+            enrollmentForm.CourseId.Value));
+
+        enrollmentForm.StudentId = null;
+        enrollmentForm.CourseId = null;
+    }
+
+    private void SetGradeAssignment(Guid enrollmentId, string? rawValue)
+    {
+        enrollmentAssignmentSelections[enrollmentId] =
+            Guid.TryParse(rawValue, out var assignmentId) ? assignmentId : null;
+    }
+
+    private void SetGradeValue(Guid enrollmentId, string? rawValue)
+    {
+        enrollmentGradeValues[enrollmentId] = rawValue ?? string.Empty;
+    }
+
+    private string GetGradeValue(Guid enrollmentId)
+    {
+        return enrollmentGradeValues.TryGetValue(enrollmentId, out var value) ? value : string.Empty;
+    }
+
+    private async Task SubmitGrade(Guid enrollmentId)
+    {
+        if (!enrollmentAssignmentSelections.TryGetValue(enrollmentId, out var assignmentId) || !assignmentId.HasValue)
+        {
+            return;
+        }
+
+        if (!enrollmentGradeValues.TryGetValue(enrollmentId, out var rawGrade) || !int.TryParse(rawGrade, out var gradeValue))
+        {
+            return;
+        }
+
+        await OnAddGrade.InvokeAsync(new GradeCreateRequest(
+            enrollmentId,
+            assignmentId.Value,
+            gradeValue));
+
+        enrollmentAssignmentSelections.Remove(enrollmentId);
+        enrollmentGradeValues.Remove(enrollmentId);
+    }
+
+    private sealed class EnrollmentFormModel
+    {
+        public Guid? StudentId { get; set; }
+        public Guid? CourseId { get; set; }
+    }
+}
