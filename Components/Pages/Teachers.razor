@@ -1,0 +1,44 @@
+@page "/teachers"
+@using Microsoft.EntityFrameworkCore
+@inject AppDbContext db
+
+<PageTitle>Teachers</PageTitle>
+
+<h2 class="mb-3">Teachers</h2>
+
+@if (teachers.Count == 0)
+{
+    <div class="alert alert-info">No teachers found.</div>
+}
+else
+{
+    <table class="table table-striped table-hover">
+        <thead class="table-dark">
+            <tr>
+                <th>Name</th>
+                <th>Department</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var teacher in teachers)
+            {
+                <tr>
+                    <td>@teacher.Name</td>
+                    <td>@(string.IsNullOrWhiteSpace(teacher.Department) ? "-" : teacher.Department)</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<Teacher> teachers = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        teachers = await db.Teachers
+            .AsNoTracking()
+            .OrderBy(t => t.Name)
+            .ToListAsync();
+    }
+}

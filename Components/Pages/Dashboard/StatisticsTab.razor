@@ -1,0 +1,106 @@
+@using StudentsBlazorApp.Components.Pages.Dashboard
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <div class="text-muted small">Active Students</div>
+                <div class="fs-3 fw-bold">@StudentCount</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <div class="text-muted small">Active Courses</div>
+                <div class="fs-3 fw-bold">@CourseCount</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <div class="text-muted small">Assignments</div>
+                <div class="fs-3 fw-bold">@AssignmentCount</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <div class="text-muted small">Enrollments</div>
+                <div class="fs-3 fw-bold">@EnrollmentCount</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <h2 class="h5 mb-3">Top Students</h2>
+                @RenderStats(TopStudents)
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <h2 class="h5 mb-3">Average Grade Per Student</h2>
+                @RenderStats(AveragePerStudent)
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <h2 class="h5 mb-3">Average Grade Per Course</h2>
+                @RenderStats(AveragePerCourse)
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public int StudentCount { get; set; }
+    [Parameter] public int CourseCount { get; set; }
+    [Parameter] public int AssignmentCount { get; set; }
+    [Parameter] public int EnrollmentCount { get; set; }
+    [Parameter] public IReadOnlyList<DashboardStatRow> TopStudents { get; set; } = [];
+    [Parameter] public IReadOnlyList<DashboardStatRow> AveragePerStudent { get; set; } = [];
+    [Parameter] public IReadOnlyList<DashboardStatRow> AveragePerCourse { get; set; } = [];
+
+    private RenderFragment RenderStats(IReadOnlyList<DashboardStatRow> items) => builder =>
+    {
+        if (items.Count == 0)
+        {
+            builder.OpenElement(0, "div");
+            builder.AddAttribute(1, "class", "text-muted");
+            builder.AddContent(2, "No grade data.");
+            builder.CloseElement();
+            return;
+        }
+
+        builder.OpenElement(3, "ul");
+        builder.AddAttribute(4, "class", "list-group list-group-flush");
+
+        var seq = 5;
+        foreach (var item in items)
+        {
+            builder.OpenElement(seq++, "li");
+            builder.AddAttribute(seq++, "class", "list-group-item d-flex justify-content-between");
+            builder.OpenElement(seq++, "span");
+            builder.AddContent(seq++, item.Name);
+            builder.CloseElement();
+            builder.OpenElement(seq++, "strong");
+            builder.AddContent(seq++, item.Average.ToString("0.##"));
+            builder.CloseElement();
+            builder.CloseElement();
+        }
+
+        builder.CloseElement();
+    };
+}

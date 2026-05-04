@@ -1,0 +1,123 @@
+@using System.ComponentModel.DataAnnotations
+@using StudentsBlazorApp.Components.Pages.Dashboard
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <h2 class="h4 mb-3">Assignment List</h2>
+                @if (Assignments.Count == 0)
+                {
+                    <div class="text-muted">No assignments found.</div>
+                }
+                else
+                {
+                    <div class="list-group">
+                        @foreach (var assignment in Assignments)
+                        {
+                            var selected = SelectedAssignmentId == assignment.Id;
+                            <button type="button"
+                                    class="list-group-item list-group-item-action @(selected ? "active" : null)"
+                                    @onclick="() => OnSelectAssignment.InvokeAsync(assignment.Id)">
+                                <div class="d-flex w-100 justify-content-between">
+                                    <strong>@assignment.Title</strong>
+                                    <span>@(assignment.DueDate?.ToString("yyyy-MM-dd") ?? "-")</span>
+                                </div>
+                                <div>@(assignment.Course?.Title ?? "-")</div>
+                            </button>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h2 class="h4 mb-3">Add Assignment</h2>
+                <EditForm Model="assignmentForm" OnValidSubmit="SubmitAdd" FormName="add-assignment-form">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+                    <div class="mb-3">
+                        <InputSelect class="form-select" @bind-Value="assignmentForm.CourseId">
+                            <option value="">Select course</option>
+                            @foreach (var course in Courses)
+                            {
+                                <option value="@course.Id">@course.Title</option>
+                            }
+                        </InputSelect>
+                    </div>
+                    <div class="mb-3">
+                        <InputText class="form-control" @bind-Value="assignmentForm.Title" placeholder="Assignment Title" />
+                    </div>
+                    <div class="mb-3">
+                        <InputDate class="form-control" @bind-Value="assignmentForm.DueDate" />
+                    </div>
+                    <button class="btn btn-primary w-100" type="submit">Add Assignment</button>
+                </EditForm>
+            </div>
+        </div>
+
+        <div class="card shadow-sm mt-4">
+            <div class="card-body">
+                <h2 class="h5 mb-3">Selected Assignment</h2>
+                @if (SelectedAssignment is null)
+                {
+                    <div class="text-muted">Select an assignment to view details.</div>
+                }
+                else
+                {
+                    <div><strong>Title:</strong> @SelectedAssignment.Title</div>
+                    <div><strong>Course:</strong> @(SelectedAssignment.Course?.Title ?? "-")</div>
+                    <div><strong>Teacher:</strong> @(SelectedAssignment.Course?.Teacher?.Name ?? "-")</div>
+                    <div><strong>Due:</strong> @(SelectedAssignment.DueDate?.ToString("yyyy-MM-dd") ?? "-")</div>
+                    <button type="button" class="btn btn-sm btn-danger mt-3" @onclick="() => OnDeleteAssignment.InvokeAsync(SelectedAssignment.Id)">Delete Assignment</button>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public IReadOnlyList<Assignment> Assignments { get; set; } = [];
+    [Parameter] public IReadOnlyList<Course> Courses { get; set; } = [];
+    [Parameter] public Guid? SelectedAssignmentId { get; set; }
+    [Parameter] public EventCallback<Guid> OnSelectAssignment { get; set; }
+    [Parameter] public EventCallback<AssignmentCreateRequest> OnAddAssignment { get; set; }
+    [Parameter] public EventCallback<Guid> OnDeleteAssignment { get; set; }
+
+    private readonly AssignmentFormModel assignmentForm = new();
+
+    private Assignment? SelectedAssignment =>
+        SelectedAssignmentId.HasValue
+            ? Assignments.FirstOrDefault(a => a.Id == SelectedAssignmentId.Value)
+            : null;
+
+    private async Task SubmitAdd()
+    {
+        if (!assignmentForm.CourseId.HasValue)
+        {
+            return;
+        }
+
+        await OnAddAssignment.InvokeAsync(new AssignmentCreateRequest(
+            assignmentForm.CourseId.Value,
+            assignmentForm.Title,
+            assignmentForm.DueDate));
+
+        assignmentForm.CourseId = null;
+        assignmentForm.Title = string.Empty;
+        assignmentForm.DueDate = null;
+    }
+
+    private sealed class AssignmentFormModel
+    {
+        public Guid? CourseId { get; set; }
+
+        [Required]
+        public string Title { get; set; } = string.Empty;
+
+        public DateTime? DueDate { get; set; }
+    }
+}
